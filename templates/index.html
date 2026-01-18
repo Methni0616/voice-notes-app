@@ -5,14 +5,74 @@
   <title>Voice Notes</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="/static/style.css">
-
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 
-<script>
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/static/service-worker.js");
-}
-</script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/static/service-worker.js");
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #333;
+    }
+    body.dark {
+      background: #121212;
+      color: #f5f5f5;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn {
+      margin: 10px 5px;
+      padding: 10px 15px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+    }
+    .record { background: #ff4b5c; color: #fff; }
+    .save { background: #4caf50; color: #fff; }
+    .notes-list {
+      list-style: none;
+      padding: 0;
+    }
+    .notes-list li {
+      background: #ffe0e0;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    body.dark .notes-list li {
+      background: #1e1e1e;
+    }
+    .actions button {
+      margin-left: 5px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .actions button:hover {
+      opacity: 0.8;
+    }
+  </style>
 </head>
 <body>
 
@@ -35,10 +95,7 @@ if ("serviceWorker" in navigator) {
   let transcript = "";
 
   function startRecording() {
-    // 📳 Vibration feedback
-    if (navigator.vibrate) {
-      navigator.vibrate(200);
-    }
+    if (navigator.vibrate) navigator.vibrate(200);
 
     const recognition = new webkitSpeechRecognition();
     recognition.lang = "en-US";
@@ -70,10 +127,30 @@ if ("serviceWorker" in navigator) {
   }
 
   function shareNote(note) {
-    const url = `https://wa.me/?text=${encodeURIComponent(note)}`;
-    window.open(url, "_blank");
-  }
+  // Encode note for URL
+  const encodedNote = encodeURIComponent(note);
 
+  // Mobile detection
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    // Open WhatsApp app on mobile
+    window.open(`https://wa.me/?text=${encodedNote}`, "_blank");
+  } else {
+    // Try to open WhatsApp Web on desktop
+    const whatsappWebUrl = `https://web.whatsapp.com/send?text=${encodedNote}`;
+    const newWindow = window.open(whatsappWebUrl, "_blank");
+
+    if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+      // If blocked or not available, copy to clipboard instead
+      navigator.clipboard.writeText(note).then(() => {
+        alert("Note copied to clipboard! You can paste it anywhere.");
+      }).catch(() => {
+        alert("Unable to share or copy. Please copy manually:\n" + note);
+      });
+    }
+  }
+}
   function loadNotes() {
     fetch("/get_notes")
       .then(res => res.json())
@@ -83,13 +160,26 @@ if ("serviceWorker" in navigator) {
 
         data.forEach((note, index) => {
           const li = document.createElement("li");
-          li.innerHTML = `
-            <span>${note}</span>
-            <div class="actions">
-              <button onclick="shareNote('${note}')">📤</button>
-              <button onclick="deleteNote(${index})">🗑</button>
-            </div>
-          `;
+
+          const span = document.createElement("span");
+          span.innerText = note;
+
+          const actions = document.createElement("div");
+          actions.className = "actions";
+
+          const shareBtn = document.createElement("button");
+          shareBtn.innerText = "📤";
+          shareBtn.addEventListener("click", () => shareNote(note));
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.innerText = "🗑";
+          deleteBtn.addEventListener("click", () => deleteNote(index));
+
+          actions.appendChild(shareBtn);
+          actions.appendChild(deleteBtn);
+
+          li.appendChild(span);
+          li.appendChild(actions);
           list.appendChild(li);
         });
       });
